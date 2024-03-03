@@ -1,11 +1,13 @@
 extern crate dotenv;
 use dotenv::dotenv;
 
-use crate::models::product_model::ProductModel;
-use crate::models::user_model::User;
+use crate::models::{
+    product_model::ProductModel,
+    user_model::{LoginUser, User},
+};
 use mongodb::{
     bson::{doc, extjson::de::Error, oid::ObjectId},
-    results::{InsertOneResult, UpdateResult},
+    results::{DeleteResult, InsertOneResult, UpdateResult},
     sync::{Client, Database},
 };
 
@@ -16,7 +18,7 @@ pub struct MongoRepo {
 impl MongoRepo {
     pub fn init() -> Self {
         dotenv().ok();
-        let uri = "mongodb+srv://abrxao:aoc20100@cluster0.5ira1e9.mongodb.net/?retryWrites=true&w=majority".to_string();
+        let uri = dotenv::var("MONGO_URL").unwrap();
         let client = Client::with_uri_str(uri).unwrap();
         let db_connection = client.database("rustDB");
         MongoRepo { db: db_connection }
@@ -25,73 +27,50 @@ impl MongoRepo {
 
 //Funções de utilização do banco de dados modificações de usuario
 impl MongoRepo {
-    pub fn create_user(&self, new_user: User) -> Result<InsertOneResult, Error> {
-        let new_doc = User {
-            id: None,
-            name: new_user.name,
-            location: new_user.location,
-            title: new_user.title,
-        };
-        let user = self
+    pub fn register_user(&self, new_user: User) -> Result<InsertOneResult, Error> {
+        let filter = doc! {"username": &new_user.username};
+        let is_existing_user = self
             .db
-            .collection("User")
-            .insert_one(new_doc, None)
-            .ok()
-            .expect("Error creating user");
-        Ok(user)
-    }
-    pub fn get_user(&self, id: &String) -> Result<User, Error> {
-        let obj_id = ObjectId::parse_str(id).unwrap();
-        let filter = doc! {"_id": obj_id};
-        let user_detail = self
-            .db
-            .collection("User")
+            .collection::<User>("users")
             .find_one(filter, None)
             .ok()
-            .expect("Error getting user's detail");
-        Ok(user_detail.unwrap())
+            .expect("Error checking if user exists");
+        match is_existing_user {
+            Some(_) => Err(Error::DeserializationError {
+                message: "User already exists".to_string(),
+            }),
+            None => {
+                let user = self
+                    .db
+                    .collection::<User>("users")
+                    .insert_one(new_user, None)
+                    .ok()
+                    .expect("Error creating user");
+                Ok(user)
+            }
+        }
     }
-    pub fn get_all_users(&self) -> Result<Vec<User>, Error> {
-        let users = self
+
+    pub fn login(&self, login_user: &LoginUser) -> Result<User, Error> {
+        let filter = doc! {"username": &login_user.username};
+        let is_existing_user = self
             .db
-            .collection("User")
-            .find(None, None)
+            .collection::<User>("users")
+            .find_one(filter, None)
             .ok()
-            .expect("Error getting user's detail");
-        Ok(users.map(|user| user.unwrap()).collect())
+            .expect("Error checking if user exists");
+        match is_existing_user {
+            Some(user) => Ok(user),
+            None => Err(Error::DeserializationError {
+                message: "Usuario não existe".to_string(),
+            }),
+        }
     }
-    pub fn delete_user(&self, id: &String) -> Result<Option<User>, Error> {
-        let obj_id = ObjectId::parse_str(id).unwrap();
-        let filter = doc! {"_id": obj_id};
-        let deleted_doc = self
-            .db
-            .collection("User")
-            .find_one_and_delete(filter, None)
-            .ok()
-            .expect("Error deleting user");
-        Ok(deleted_doc)
-    }
-    pub fn update_user(&self, id: &String, new_user: User) -> Result<UpdateResult, Error> {
-        let obj_id = ObjectId::parse_str(id).unwrap();
-        let filter = doc! {"_id": obj_id};
-        let new_doc = doc! {
-            "$set":
-                {
-                    "id": new_user.id,
-                    "name": new_user.name,
-                    "location": new_user.location,
-                    "title": new_user.title
-                },
-        };
-        let updated_doc = self
-            .db
-            .collection::<User>("User")
-            .update_one(filter, new_doc, None)
-            .ok()
-            .expect("Error updating user");
-        Ok(updated_doc)
-    }
+
+    /*     pub fn session_token(&self, user_id: &String) -> Result<InsertOneResult, Error> {} */
 }
+//Funções de utilização do banco de dados para gerenciamento de sessions
+impl MongoRepo {}
 //Funções de utilização do banco de dados modificações dos produtos
 impl MongoRepo {
     pub fn create_product(&self, new_product: ProductModel) -> Result<InsertOneResult, Error> {
@@ -174,6 +153,20 @@ impl MongoRepo {
             .db
             .collection("products")
             .find_one_and_delete(filter, None)
+            .ok()
+            .expect("Error deleting product");
+        Ok(deleted_doc)
+    }
+    pub fn delete_many_products(&self, ids: &Vec<String>) -> Result<DeleteResult, Error> {
+        let to_delete_ids: Vec<ObjectId> = ids
+            .iter()
+            .map(|id| ObjectId::parse_str(id).unwrap())
+            .collect();
+        let filter = doc! {"_id":{"$in": to_delete_ids}};
+        let deleted_doc = self
+            .db
+            .collection::<ProductModel>("products")
+            .delete_many(filter, None)
             .ok()
             .expect("Error deleting product");
         Ok(deleted_doc)

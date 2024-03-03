@@ -1,10 +1,10 @@
 use crate::{
-    models::product_model::{ProductModel, ProductModelJsonRequest},
+    models::product_model::{DeleteManyProducts, ProductModel, ProductModelJsonRequest},
     repository::mongo_repo::MongoRepo,
 };
 use mongodb::{
     bson::{oid::ObjectId, DateTime},
-    results::InsertOneResult,
+    results::{DeleteResult, InsertOneResult},
 };
 use rocket::{http::Status, serde::json::Json, State};
 
@@ -13,7 +13,7 @@ pub fn create_product(
     db: &State<MongoRepo>,
     new_product: Json<ProductModelJsonRequest>,
 ) -> Result<Json<InsertOneResult>, Status> {
-    let data = ProductModel {
+    let product = ProductModel {
         id: None,
         name: new_product.name.to_owned(),
         price: new_product.price.to_owned(),
@@ -27,7 +27,7 @@ pub fn create_product(
         deleted_at: None,
         status: true,
     };
-    let product_detail = db.create_product(data);
+    let product_detail = db.create_product(product);
     match product_detail {
         Ok(product) => Ok(Json(product)),
         Err(_) => Err(Status::InternalServerError),
@@ -51,7 +51,7 @@ pub fn update_product(
     if id.is_empty() {
         return Err(Status::BadRequest);
     };
-    let data = ProductModel {
+    let new_product = ProductModel {
         id: Some(ObjectId::parse_str(&id).unwrap()),
         name: new_product_data.name.to_owned(),
         price: new_product_data.price.to_owned(),
@@ -66,17 +66,17 @@ pub fn update_product(
         deleted_at: None,
         status: new_product_data.status.to_owned(),
     };
-    let update_result = db.update_product(&id, data);
+    let update_result = db.update_product(&id, new_product);
     match update_result {
         Ok(update) => {
             if update.matched_count == 1 {
                 let updated_product_info = db.get_product(&id);
-                return match updated_product_info {
+                match updated_product_info {
                     Ok(product) => Ok(Json(product)),
                     Err(_) => Err(Status::InternalServerError),
-                };
+                }
             } else {
-                return Err(Status::NotFound);
+                Err(Status::NotFound)
             }
         }
         Err(_) => Err(Status::InternalServerError),
@@ -94,6 +94,7 @@ pub fn get_product(db: &State<MongoRepo>, path: String) -> Result<Json<ProductMo
         Err(_) => Err(Status::InternalServerError),
     }
 }
+
 #[delete("/product/<path>")]
 pub fn delete_product(db: &State<MongoRepo>, path: String) -> Result<Json<ProductModel>, Status> {
     let id = path;
@@ -103,6 +104,24 @@ pub fn delete_product(db: &State<MongoRepo>, path: String) -> Result<Json<Produc
     let delete_result = db.delete_product(&id);
     match delete_result {
         Ok(delete) => Ok(Json(delete.unwrap())),
+        Err(_) => Err(Status::InternalServerError),
+    }
+}
+
+#[delete("/products", data = "<products_to_delete>")]
+pub fn delete_many_products(
+    db: &State<MongoRepo>,
+    products_to_delete: Json<DeleteManyProducts>,
+) -> Result<Json<DeleteResult>, Status> {
+    let ids = products_to_delete.ids.to_owned();
+
+    if ids.is_empty() {
+        return Err(Status::BadRequest);
+    };
+
+    let deleted_products = db.delete_many_products(&ids);
+    match deleted_products {
+        Ok(delete) => Ok(Json(delete)),
         Err(_) => Err(Status::InternalServerError),
     }
 }
