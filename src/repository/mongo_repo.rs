@@ -36,9 +36,7 @@ impl MongoRepo {
             .ok()
             .expect("Error checking if user exists");
         match is_existing_user {
-            Some(_) => Err(Error::DeserializationError {
-                message: "User already exists".to_string(),
-            }),
+            Some(_) => Err(Error::DeserializationError { message: "User already exists".to_string()}),
             None => {
                 let user = self
                     .db

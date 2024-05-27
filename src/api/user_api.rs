@@ -28,7 +28,8 @@ pub fn register_user(
     let user_detail = db.register_user(data);
     match user_detail {
         Ok(user) => Ok(Json(user)),
-        Err(_) => Err(Status::NotImplemented),
+        Err(_) => Err(Status::Conflict)
+        ,
     }
 }
 
