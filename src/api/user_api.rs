@@ -28,16 +28,15 @@ pub fn register_user(
     let user_detail = db.register_user(data);
     match user_detail {
         Ok(user) => Ok(Json(user)),
-        Err(_) => Err(Status::Conflict)
-        ,
+        Err(_) => Err(Status::Conflict),
     }
 }
 
 #[post("/login", data = "<login>")]
 pub fn login(db: &State<MongoRepo>, login: Json<LoginUser>) -> Result<Json<User>, Status> {
     let login = login.into_inner();
-    let user = db.login(&login);
-    let user = match user {
+    let user_res = db.login(&login);
+    let user = match user_res {
         Ok(user) => user,
         Err(_) => return Err(Status::InternalServerError),
     };

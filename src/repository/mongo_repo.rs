@@ -36,7 +36,9 @@ impl MongoRepo {
             .ok()
             .expect("Error checking if user exists");
         match is_existing_user {
-            Some(_) => Err(Error::DeserializationError { message: "User already exists".to_string()}),
+            Some(_) => Err(Error::DeserializationError {
+                message: "User already exists".to_string(),
+            }),
             None => {
                 let user = self
                     .db
@@ -64,11 +66,11 @@ impl MongoRepo {
             }),
         }
     }
-
-    /*     pub fn session_token(&self, user_id: &String) -> Result<InsertOneResult, Error> {} */
 }
 //Funções de utilização do banco de dados para gerenciamento de sessions
-impl MongoRepo {}
+impl MongoRepo {
+    /* pub fn session_token(&self, user_id: &String) -> Result<InsertOneResult, Error> {} */
+}
 //Funções de utilização do banco de dados modificações dos produtos
 impl MongoRepo {
     pub fn create_product(&self, new_product: ProductModel) -> Result<InsertOneResult, Error> {
